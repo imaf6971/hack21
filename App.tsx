@@ -1,149 +1,118 @@
 import { StatusBar } from 'expo-status-bar';
-import { Button, Dimensions, Image, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import MapView, { LatLng, MapMarker, Region } from 'react-native-maps';
-import Charger from './assets/charger.svg';
+import { Modal, StyleSheet, Text, TouchableHighlight, View } from 'react-native';
+import MapView, { Marker } from 'react-native-maps';
 
 import * as Location from 'expo-location';
 import { useEffect, useRef, useState } from 'react';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 
 import {
   QueryClient,
   QueryClientProvider,
   useQuery,
 } from '@tanstack/react-query'
+import { MapPointModal } from './components/MapPointModal';
+import SvgMarkerGreen from './components/icons/MarkerGreen';
+import SvgMarkerYellow from './components/icons/MarkerYellow';
+import SvgMarkerWhite from './components/icons/MarkerWhite';
 
 function useLocation() {
-  const [location, setLocation] = useState<Location.LocationObject | null>(null);
-  const [errorMsg, setErrorMsg] = useState(null);
+  const [isGranted, setIsGranted] = useState(false);
+
+  async function requestPermissions() {
+    const { granted, canAskAgain } = await Location.requestForegroundPermissionsAsync();
+    setIsGranted(granted);
+  }
 
   useEffect(() => {
-    (async () => {
-
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setErrorMsg('Permission to access location was denied');
-        return;
-      }
-
-      let location = await Location.getCurrentPositionAsync({});
-      setLocation(location);
-    })();
+    requestPermissions()
   }, []);
 
-  const isError = errorMsg !== null;
-  return { location, errorMsg, isError };
+  return { isGranted, requestPermissions };
 }
 
-type MapBox = {
-  l: number,
-  b: number,
-  r: number,
-  t: number,
+type MapMarkers = {
+  id: number,
+  latitude: number,
+  longitude: number,
+  color: "GREEN" | "YELLOW" | "WHITE"
+}[];
+function useMapMarkers() {
+  return useQuery<MapMarkers>({
+    queryKey: ['useMapMarkers'],
+    queryFn: () => fetch('http://10.178.130.105:3001/api/v1/mapPoints')
+      .then(a => a.json())
+  })
 }
 
-async function fetchChargingStations({ l, b, r, t }: MapBox) {
-  console.log('fetchChargingStations');
-  const bbox = `${l},${b},${r},${t}`;
-
-  console.log("bbox", `
-        [out:json][timeout:25];
-        (
-         node["amenity"="charging_station"](${bbox});
-         way["amenity"="charging_station"](${bbox});
-         relation["amenity"="charging_station"](${bbox});
-        );
-        out body;
-      `);
-  const resp = await fetch('https://overpass-api.de/api/interpreter', {
-    method: 'POST',
-    body: `
-        [out:json][timeout:25];
-        (
-         node["amenity"="charging_station"](${bbox});
-         way["amenity"="charging_station"](${bbox});
-         relation["amenity"="charging_station"](${bbox});
-        );
-        out body;
-      `})
-  const body = await resp.text();
-  console.log(body)
-  // const response = await resp.json();
-  // return response.elements;
-}
-
-function regionToMapBox(region: Region): MapBox {
-  return {
-    l: region.longitude + (-0.5 * region.longitudeDelta),
-    r: region.longitude + (0.5 * region.longitudeDelta),
-    b: region.latitude + (-0.5 * region.latitudeDelta),
-    t: region.latitude + (0.5 * region.latitudeDelta),
-  }
-}
 
 function Screen() {
+  const { isGranted } = useLocation();
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
+  const [selectedMarkerId, setSelectedMarkerId] = useState<number | null>(null);
+  const { isSuccess, data: mapMarkers } = useMapMarkers();
+  const mapRef = useRef<MapView>(null);
+
   return (
     <View style={styles.container}>
       <MapView
+        ref={mapRef}
         style={styles.map}
         showsIndoors={false}
         showsPointsOfInterest={false}
-        followsUserLocation
-        showsMyLocationButton={true}
+        showsMyLocationButton={false}
         showsUserLocation
-        onPress={() => {
+        onUserLocationChange={e => {
+          if (userLocation === null) {
+            mapRef.current.animateToRegion({
+              ...e.nativeEvent.coordinate,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            })
+          }
+          setUserLocation(e.nativeEvent.coordinate)
         }}
       >
-        <MapMarker
-          onPress={() => setIsModalVisible(true)}
-          coordinate={{ latitude: 55.7799284, longitude: 49.1334644 }}
-        />
-      </MapView>
+        {isSuccess && mapMarkers.map(mapMarker => (
+          <Marker
+            onPress={() => {
+              setSelectedMarkerId(mapMarker.id)
+              setTimeout(() => setIsModalVisible(true), 300)
+            }}
+            key={mapMarker.id}
+            coordinate={{
+              latitude: mapMarker.latitude,
+              longitude: mapMarker.longitude
+            }}
+          >
 
+            {mapMarker.color === "YELLOW" && <SvgMarkerYellow />}
+            {mapMarker.color === "WHITE" && <SvgMarkerWhite />}
+            {mapMarker.color === "GREEN" && <SvgMarkerGreen />}
+          </Marker>
+        ))}
+      </MapView>
+      <View style={{ position: 'absolute', bottom: 32, right: 16 }}>
+        <TouchableHighlight onPress={() => {
+          mapRef.current.animateToRegion({
+            ...userLocation,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          })
+        }} activeOpacity={0.8} style={{ borderRadius: 1000, width: 72, height: 72, backgroundColor: '#111C35', justifyContent: 'center', alignItems: 'center' }}>
+          <FontAwesome size={40} color='#FFCF26' name={isGranted ? "location-arrow" : 'close'} />
+        </TouchableHighlight>
+      </View>
       <Modal
         transparent
+        animationType='slide'
         visible={isModalVisible}
         onRequestClose={() => {
           setIsModalVisible(false)
         }}
-        animationType="slide"
       >
-        <View style={styles.modal}>
-          <TouchableOpacity
-            onPress={() => setIsModalVisible(false)}
-            style={styles.closeButton}
-          />
-          <View style={{ marginTop: 26, alignSelf: 'flex-start' }}>
-            <Text style={{ fontSize: 18, fontWeight: '700' }}>ITCHARGE</Text>
-            <Text>Ул. Петербургская 52, Казань</Text>
-          </View>
-          <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 26 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <View style={{ width: 42, height: 42, backgroundColor: '#111C35', borderRadius: 1000 }} />
-              <View>
-                <Text style={{ fontSize: 16, fontWeight: '700' }}>Type 1</Text>
-                <Text>22 КВт</Text>
-              </View>
-            </View>
-            <TouchableOpacity activeOpacity={0.8} style={{ width: 150, backgroundColor: '#111C35', borderRadius: 20, padding: 12 }}>
-              <Text style={{ color: 'white', textAlign: 'center', textTransform: 'uppercase', fontWeight: '400' }}>Свободен</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 26 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <View style={{ width: 42, height: 42, backgroundColor: '#111C35', borderRadius: 1000 }} />
-              <View>
-                <Text style={{ fontSize: 16, fontWeight: '700' }}>Type 1</Text>
-                <Text>22 КВт</Text>
-              </View>
-            </View>
-
-            <TouchableOpacity activeOpacity={0.8} style={{ width: 150, backgroundColor: '#DAFE00', borderRadius: 20, padding: 12 }}>
-              <Text style={{ color: '#111C35', textAlign: 'center', textTransform: 'uppercase', fontWeight: '400' }}>Забронировано</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <MapPointModal pointId={selectedMarkerId} />
       </Modal >
       <StatusBar style="auto" />
     </View >
@@ -166,27 +135,6 @@ const styles = StyleSheet.create({
   },
   map: {
     width: '100%',
-    height: '100%',
-  },
-  modal: {
-    height: '40%',
-    width: '100%',
-    backgroundColor: 'white',
-    position: 'absolute',
-    borderRadius: 20,
-    borderColor: '#111C35',
-    borderWidth: 2,
-    bottom: 0,
-    alignItems: 'center',
-    paddingTop: 16,
-    paddingHorizontal: 24,
-  },
-  closeButton: {
-    backgroundColor: '#111C35',
-    width: 105,
-    height: 8,
-    borderRadius: 20,
-    color: '#111C35',
-    borderColor: 'black'
+    height: '125%',
   },
 });
