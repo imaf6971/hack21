@@ -2,19 +2,20 @@ import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useQuery } from "@tanstack/react-query";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef, useState } from "react";
-import { Modal, StyleSheet, TouchableHighlight, View } from "react-native";
+import { Modal, StyleSheet, Text, TouchableHighlight, View } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 import SvgMarkerGreen from "../../components/icons/MarkerGreen";
 import SvgMarkerWhite from "../../components/icons/MarkerWhite";
 import SvgMarkerYellow from "../../components/icons/MarkerYellow";
 import { MapPointModal } from "../../components/MapPointModal";
 import * as Location from 'expo-location';
+import BottomSheet from '@gorhom/bottom-sheet';
 
 function useLocation() {
   const [isGranted, setIsGranted] = useState(false);
 
   async function requestPermissions() {
-    const { granted, canAskAgain } = await Location.requestForegroundPermissionsAsync();
+    const { granted } = await Location.requestForegroundPermissionsAsync();
     setIsGranted(granted);
   }
 
@@ -41,11 +42,11 @@ function useMapMarkers() {
 
 export function MapScreen() {
   const { isGranted } = useLocation();
-  const [isModalVisible, setIsModalVisible] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
   const [selectedMarkerId, setSelectedMarkerId] = useState<number | null>(null);
   const { isSuccess, data: mapMarkers } = useMapMarkers();
   const mapRef = useRef<MapView>(null);
+  const bsRef = useRef<BottomSheet>(null);
 
   return (
     <View style={styles.container}>
@@ -71,7 +72,7 @@ export function MapScreen() {
           <Marker
             onPress={() => {
               setSelectedMarkerId(mapMarker.id)
-              setTimeout(() => setIsModalVisible(true), 300)
+              bsRef.current.collapse();
             }}
             key={mapMarker.id}
             coordinate={{
@@ -99,16 +100,14 @@ export function MapScreen() {
           <FontAwesome size={40} color='#FFCF26' name={isGranted ? "location-arrow" : 'close'} />
         </TouchableHighlight>
       </View>
-      <Modal
-        transparent
-        animationType='slide'
-        visible={isModalVisible}
-        onRequestClose={() => {
-          setIsModalVisible(false)
-        }}
+      <BottomSheet
+        enablePanDownToClose={true}
+        ref={bsRef}
+        snapPoints={['40%', '80%']}
+        index={-1}
       >
         <MapPointModal pointId={selectedMarkerId} />
-      </Modal >
+      </BottomSheet>
       <StatusBar style="auto" />
     </View >
   );

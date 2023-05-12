@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { ChargingStationRow, RentStates } from "./ChargingStationRow";
+import { ChargerHeadingView } from "./chargers/ChargerHeading";
 
 type MapPointModalProps = {
   id: number;
@@ -17,15 +18,10 @@ type MapPointModalProps = {
 }
 
 function MapPointView({ id, title, address, mapPointChargers }: MapPointModalProps) {
+
   return (
     <View style={styles.modal}>
-      <TouchableOpacity
-        style={styles.closeButton}
-      />
-      <View style={{ marginTop: 26, alignSelf: 'flex-start' }}>
-        <Text style={{ fontSize: 18, fontWeight: '700' }}>{title}</Text>
-        <Text>{address}</Text>
-      </View>
+      <ChargerHeadingView id={id} title={title} address={address} />
       {mapPointChargers.map(pointCharger => (
         <ChargingStationRow
           mapPointId={id}
@@ -80,24 +76,8 @@ const styles = StyleSheet.create({
     alignItems: "center"
   },
   modal: {
-    height: '40%',
     width: '100%',
-    backgroundColor: 'white',
-    position: 'absolute',
-    borderRadius: 20,
-    borderColor: '#111C35',
-    borderWidth: 2,
-    bottom: 0,
     alignItems: 'center',
-    paddingTop: 16,
     paddingHorizontal: 24,
-  },
-  closeButton: {
-    backgroundColor: '#111C35',
-    width: 105,
-    height: 8,
-    borderRadius: 20,
-    color: '#111C35',
-    borderColor: 'black'
   },
 })
