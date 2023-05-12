@@ -14,19 +14,30 @@ type ChargingStationRowProps = {
 
 function useRentChargingStation(opts?: UseMutationOptions) {
   return useMutation({
-    mutationFn: (input: { mapPointId: number, chargerId: number }) => {
-      return fetch('http://10.178.130.105:3001/api/v1/rent/', {
+    mutationFn: async (input: { mapPointId: number, chargerId: number }) => {
+      const resp = await fetch('http://10.178.130.105:3001/api/v1/rent/', {
         method: 'POST',
-        body: JSON.stringify(input)
-      })
+        body: JSON.stringify(input),
+        headers: {
+          'Content-Type': 'application/json'
+        },
+      });
+      if (resp.status !== 200) {
+        console.log(resp.status);
+        throw new Error();
+      }
+      return await resp.json();
     }
   });
 }
 
 export function ChargingStationRow({ mapPointId, state, charger, }: ChargingStationRowProps) {
   const client = useQueryClient();
-  const { isLoading, mutate: rent } = useRentChargingStation({
-    onSuccess: () => client.invalidateQueries(['useMapMarkersById', mapPointId])
+  const { isLoading, mutate: rent, isError } = useRentChargingStation({
+    onSuccess: async (data) => {
+      await client.invalidateQueries(['useMapMarkersById', mapPointId]);
+      console.log(data)
+    }
   });
   return (
     <View style={styles.row}>
@@ -38,20 +49,22 @@ export function ChargingStationRow({ mapPointId, state, charger, }: ChargingStat
         </View>
       </View>
       <RentButton
-        onPress={() => {
+        onPress={state === 'FREE' ? () => {
           Alert.alert(
             'Забронировать зарядную станцию?',
             'Вы уверены, что хотите забронировать зарядную станцию?',
             [{
               text: 'Да',
               onPress() {
-                rent({
-                  chargerId: charger.id,
-                  mapPointId: mapPointId
+                rent({ chargerId: charger.id, mapPointId }, {
+                  async onSuccess(data) {
+                    console.log(data)
+                    await client.invalidateQueries();
+                  }
                 })
               }
             }])
-        }}
+        } : null}
         isLoading={isLoading}
         state={state}
       />

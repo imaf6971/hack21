@@ -1,6 +1,6 @@
 import * as React from "react";
 import Svg, { Path, Circle } from "react-native-svg";
-import type { SvgProps, } from "react-native-svg";
+import type { SvgProps } from "react-native-svg";
 const SvgMarkerWhite = (props: SvgProps) => (
   <Svg
     xmlns="http://www.w3.org/2000/svg"
